@@ -29,14 +29,14 @@ def _time_window(period: str):
     today = now.date()
 
     if period == "morning":
-        # 20:00 yesterday → 08:00 today (UTC)
-        window_end = datetime(today.year, today.month, today.day, 8, 0, tzinfo=_TZ)
+        # 20:00 yesterday → now (run at 07:30 Paris = 05:30 UTC)
+        window_end = now
         window_start = window_end - timedelta(hours=12)
         slug = f"{today.isoformat()}-morning"
     elif period == "evening":
-        # 08:00 today → 20:00 today (UTC)
+        # 08:00 today → now (run at 19:30 Paris = 17:30 UTC)
         window_start = datetime(today.year, today.month, today.day, 8, 0, tzinfo=_TZ)
-        window_end = datetime(today.year, today.month, today.day, 20, 0, tzinfo=_TZ)
+        window_end = now
         slug = f"{today.isoformat()}-evening"
     else:
         raise ValueError(f"Unknown period: {period!r}. Use 'morning' or 'evening'.")

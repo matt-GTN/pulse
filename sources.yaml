@@ -1,0 +1,37 @@
+# Edit this file to add/remove sources. No redeploy needed —
+# the pipeline reads it fresh each run.
+
+arxiv:
+  enabled: true
+  categories:
+    - cs.AI
+    - cs.LG
+    - cs.CL
+  max_results: 50
+
+reddit:
+  enabled: true
+  subreddits:
+    - MachineLearning
+  sort: hot
+  limit: 30
+
+hackernews:
+  enabled: true
+  query: "AI OR LLM OR GPT OR transformer OR neural network"
+  min_points: 20
+  limit: 30
+
+rss:
+  enabled: true
+  feeds:
+    - name: TechCrunch AI
+      url: https://techcrunch.com/category/artificial-intelligence/feed/
+    - name: The Verge AI
+      url: https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+    - name: Ars Technica AI
+      url: https://feeds.arstechnica.com/arstechnica/technology-lab
+
+# Twitter/X: Skipped in v1 — fragile scraping, paid API.
+# AI Twitter news surfaces on Reddit and HN within hours.
+# Revisit in v2 if coverage gaps emerge.

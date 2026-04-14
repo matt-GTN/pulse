@@ -19,9 +19,13 @@ def rank(
 
     def sort_key(pair):
         item, scored = pair
-        cross_boost = 1 if item.get("cross_source_boost") else 0
-        editorial_boost = source_weights.get(item.get("source", ""), 1) - 1
-        return scored.importance + cross_boost + editorial_boost
+        # LLM compressed to 0-3 — tiebreaker only, not the dominant signal
+        llm = round(scored.importance / 10 * 3)
+        # Cross-source: same story on multiple sources = strong validation signal
+        cross_boost = 4 if item.get("cross_source_boost") else 0
+        # Editorial weight: (weight-1)*2 → weight 1=0, weight 2=2, weight 3=4
+        editorial_boost = (source_weights.get(item.get("source", ""), 1) - 1) * 2
+        return llm + cross_boost + editorial_boost
 
     ranked = sorted(scored_pairs, key=sort_key, reverse=True)
     top = ranked[:_TOP_N]

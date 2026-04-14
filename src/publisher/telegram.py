@@ -122,8 +122,9 @@ def send_digest(slug: str, items: list, base_url: str = None) -> bool:
         date_label = date_part
         dt = datetime.now()
 
-    tagline = _daily_message(dt)
-    header = f"📅 <b>{date_label}</b>\n{tagline}\n\n🔬 <b>AI Digest</b>\n\n"
+    period_offset = 0 if period == "Morning" else 1
+    tagline = _DAILY_MESSAGES[(dt.timetuple().tm_yday * 2 + period_offset) % len(_DAILY_MESSAGES)]
+    header = f"📅 <b>{date_label}</b>\n{tagline}\n\n"
     footer = f"\n\n📰 <a href=\"{digest_url}\">Full digest</a>"
 
     lines = []

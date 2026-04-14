@@ -21,4 +21,4 @@ RUN chmod 0644 /etc/cron.d/pulse && crontab /etc/cron.d/pulse
 # Create output directories
 RUN mkdir -p /app/output/digests /app/data
 
-CMD ["cron", "-f"]
+CMD ["sh", "-c", "printenv >> /etc/environment && cron -f"]

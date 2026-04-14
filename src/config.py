@@ -4,17 +4,22 @@ from pathlib import Path
 
 _REQUIRED_ENV_VARS = [
     "DATABASE_URL",
-    "GEMINI_API_KEY",
-    "GEMINI_MODEL",
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_CHAT_ID",
     "DIGEST_BASE_URL",
 ]
 
+_PROVIDER_REQUIRED = {
+    "gemini": ["GEMINI_API_KEY", "GEMINI_MODEL"],
+    "groq": ["GROQ_API_KEY"],
+}
+
 
 def load_env():
     """Validate required env vars are present. Raises RuntimeError with all missing vars."""
     missing = [v for v in _REQUIRED_ENV_VARS if not os.environ.get(v)]
+    provider = os.environ.get("LLM_PROVIDER", "gemini").lower()
+    missing += [v for v in _PROVIDER_REQUIRED.get(provider, []) if not os.environ.get(v)]
     if missing:
         raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
 

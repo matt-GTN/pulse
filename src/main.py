@@ -5,7 +5,7 @@ Usage: python src/main.py [morning|evening]
 import sys
 from datetime import datetime, timezone, timedelta
 
-from src.config import load_env, load_sources
+from src.config import load_env, load_sources, build_source_weights
 from src.utils.logger import get_logger
 from src.db import repository as repo
 from src.fetchers.arxiv import ArxivFetcher
@@ -117,7 +117,7 @@ def main(period: str):
     # ── 3. Summarize + Rank ───────────────────────────────────────────────────
     try:
         scored_pairs = summarize_items(unique_items)
-        top_pairs = rank(scored_pairs)
+        top_pairs = rank(scored_pairs, source_weights=build_source_weights(sources))
     except Exception as e:
         logger.error("LLM pipeline failed: %s — sending fallback", e)
         _fallback_telegram(slug, raw_items)

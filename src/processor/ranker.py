@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Dict
 
 from src.utils.logger import get_logger
 
@@ -7,15 +7,21 @@ logger = get_logger(__name__)
 _TOP_N = 15
 
 
-def rank(scored_pairs: List[Tuple[dict, object]]) -> List[Tuple[dict, object]]:
+def rank(
+    scored_pairs: List[Tuple[dict, object]],
+    source_weights: Optional[Dict[str, int]] = None,
+) -> List[Tuple[dict, object]]:
     """
-    Sort by importance (cross-source items get +1 boost), return top _TOP_N.
-    Each pair is (item_dict, ScoredResult).
+    Sort by LLM importance + cross-source boost + editorial weight, return top _TOP_N.
+    Editorial boost = source_weights[item.source] - 1 (so weight=1 is baseline).
     """
+    source_weights = source_weights or {}
+
     def sort_key(pair):
         item, scored = pair
-        boost = 1 if item.get("cross_source_boost") else 0
-        return scored.importance + boost
+        cross_boost = 1 if item.get("cross_source_boost") else 0
+        editorial_boost = source_weights.get(item.get("source", ""), 1) - 1
+        return scored.importance + cross_boost + editorial_boost
 
     ranked = sorted(scored_pairs, key=sort_key, reverse=True)
     top = ranked[:_TOP_N]

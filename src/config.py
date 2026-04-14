@@ -25,3 +25,35 @@ def load_sources(path=None):
         path = Path(__file__).parent.parent / "sources.yaml"
     with open(path) as f:
         return yaml.safe_load(f)
+
+
+def build_source_weights(sources: dict) -> dict:
+    """
+    Map each fetcher source string → editorial weight (int, default 1).
+    Weight semantics: 1 = baseline, 2 = curated, 3 = top-tier.
+    Applied at ranking time as (weight - 1) boost on top of LLM importance.
+    """
+    weights: dict = {}
+
+    arxiv = sources.get("arxiv") or {}
+    aw = arxiv.get("weight", 1)
+    for cat in arxiv.get("categories", []):
+        weights[f"arxiv:{cat}"] = aw
+
+    reddit = sources.get("reddit") or {}
+    default_rw = reddit.get("weight", 1)
+    per_sub = reddit.get("weights") or {}
+    for sub in reddit.get("subreddits", []):
+        weights[f"reddit:{sub}"] = per_sub.get(sub, default_rw)
+
+    hn = sources.get("hackernews") or {}
+    weights["hn"] = hn.get("weight", 1)
+
+    rss = sources.get("rss") or {}
+    default_fw = rss.get("default_weight", 1)
+    for feed in rss.get("feeds", []):
+        name = feed.get("name")
+        if name:
+            weights[f"rss:{name}"] = feed.get("weight", default_fw)
+
+    return weights

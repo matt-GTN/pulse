@@ -48,9 +48,10 @@ class GeminiProvider(BaseLLMProvider):
                 )
                 return self._parse(response.text)
             except Exception as e:
-                if "429" in str(e) or "quota" in str(e).lower():
+                e_str = str(e)
+                if "429" in e_str or "503" in e_str or "quota" in e_str.lower() or "unavailable" in e_str.lower():
                     wait = 2 ** (attempt + 2)
-                    logger.warning("Gemini rate limit, retrying in %ds", wait)
+                    logger.warning("Gemini transient error (%s), retrying in %ds", e_str[:40], wait)
                     time.sleep(wait)
                 else:
                     raise

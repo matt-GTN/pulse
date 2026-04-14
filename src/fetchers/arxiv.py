@@ -35,9 +35,12 @@ class ArxivFetcher(BaseFetcher):
 
     def _fetch_category(self, category: str, max_results: int, window_start: datetime, window_end: datetime) -> List[RawItem]:
         # arXiv published date = submission date, not announcement date.
-        # Papers take 1-3 days to appear after submission, so filtering by
-        # submission date within a 12h window always yields 0.
-        # We rely on DB dedup (UNIQUE on source+external_id) instead.
+        # Papers take 1-3 days to appear after submission (longer after weekends).
+        # We use a 4-day lookback instead of the strict digest window — DB dedup
+        # (UNIQUE on source+external_id) handles papers already seen.
+        from datetime import timedelta
+        lookback_start = datetime.now(tz=timezone.utc) - timedelta(days=4)
+
         params = {
             "search_query": f"cat:{category}",
             "sortBy": "submittedDate",
@@ -50,6 +53,12 @@ class ArxivFetcher(BaseFetcher):
         root = ET.fromstring(resp.text)
         items = []
         for entry in root.findall("atom:entry", _NS):
+            published_str = entry.findtext("atom:published", namespaces=_NS)
+            if published_str:
+                published = datetime.fromisoformat(published_str.replace("Z", "+00:00"))
+                if published < lookback_start:
+                    continue
+
             arxiv_id_raw = entry.findtext("atom:id", namespaces=_NS) or ""
             arxiv_id = arxiv_id_raw.split("/abs/")[-1]
             title = (entry.findtext("atom:title", namespaces=_NS) or "").strip().replace("\n", " ")

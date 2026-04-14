@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 from typing import List
 
@@ -8,11 +9,36 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_HEADERS = {"User-Agent": "pulse-digest/1.0 (personal AI news aggregator)"}
+_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
+_API_BASE = "https://oauth.reddit.com"
+_USER_AGENT = "python:pulse-digest:v1.0 (by /u/mattgtn)"
 
 
 class RedditFetcher(BaseFetcher):
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self._token: str | None = None
+
+    def _get_token(self) -> str:
+        client_id = os.environ["REDDIT_CLIENT_ID"]
+        client_secret = os.environ["REDDIT_CLIENT_SECRET"]
+        resp = requests.post(
+            _TOKEN_URL,
+            auth=(client_id, client_secret),
+            data={"grant_type": "client_credentials"},
+            headers={"User-Agent": _USER_AGENT},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        return resp.json()["access_token"]
+
     def fetch(self, window_start: datetime, window_end: datetime) -> List[RawItem]:
+        try:
+            self._token = self._get_token()
+        except Exception as e:
+            logger.warning("Reddit OAuth failed — skipping: %s", e)
+            return []
+
         subreddits = self.config.get("subreddits", [])
         sort = self.config.get("sort", "hot")
         limit = self.config.get("limit", 30)
@@ -28,8 +54,9 @@ class RedditFetcher(BaseFetcher):
         return items
 
     def _fetch_subreddit(self, sub: str, sort: str, limit: int, window_start: datetime, window_end: datetime) -> List[RawItem]:
-        url = f"https://www.reddit.com/r/{sub}/{sort}.json"
-        resp = requests.get(url, headers=_HEADERS, params={"limit": limit}, timeout=30)
+        url = f"{_API_BASE}/r/{sub}/{sort}.json"
+        headers = {"Authorization": f"Bearer {self._token}", "User-Agent": _USER_AGENT}
+        resp = requests.get(url, headers=headers, params={"limit": limit}, timeout=30)
         resp.raise_for_status()
 
         posts = resp.json().get("data", {}).get("children", [])

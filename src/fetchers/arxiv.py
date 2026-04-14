@@ -34,6 +34,10 @@ class ArxivFetcher(BaseFetcher):
         return items
 
     def _fetch_category(self, category: str, max_results: int, window_start: datetime, window_end: datetime) -> List[RawItem]:
+        # arXiv published date = submission date, not announcement date.
+        # Papers take 1-3 days to appear after submission, so filtering by
+        # submission date within a 12h window always yields 0.
+        # We rely on DB dedup (UNIQUE on source+external_id) instead.
         params = {
             "search_query": f"cat:{category}",
             "sortBy": "submittedDate",
@@ -46,14 +50,6 @@ class ArxivFetcher(BaseFetcher):
         root = ET.fromstring(resp.text)
         items = []
         for entry in root.findall("atom:entry", _NS):
-            published_str = entry.findtext("atom:published", namespaces=_NS)
-            if not published_str:
-                continue
-            published = datetime.fromisoformat(published_str.replace("Z", "+00:00"))
-
-            if published < window_start or published >= window_end:
-                continue
-
             arxiv_id_raw = entry.findtext("atom:id", namespaces=_NS) or ""
             arxiv_id = arxiv_id_raw.split("/abs/")[-1]
             title = (entry.findtext("atom:title", namespaces=_NS) or "").strip().replace("\n", " ")

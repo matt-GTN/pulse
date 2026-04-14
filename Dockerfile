@@ -21,4 +21,7 @@ RUN chmod 0644 /etc/cron.d/pulse && crontab /etc/cron.d/pulse
 # Create output directories
 RUN mkdir -p /app/output/digests /app/data
 
-CMD ["sh", "-c", "printenv >> /etc/environment && cron -f"]
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+CMD ["/entrypoint.sh"]

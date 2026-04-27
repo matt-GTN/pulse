@@ -7,7 +7,7 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_TITLE_THRESHOLD = 85  # fuzzy match % to consider two titles the same story
+_TITLE_THRESHOLD = 78  # fuzzy match % to consider two titles the same story
 
 
 def _normalize_url(url: str) -> str:

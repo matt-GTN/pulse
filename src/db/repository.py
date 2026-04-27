@@ -53,6 +53,22 @@ def get_raw_items_in_window(window_start, window_end):
             return cur.fetchall()
 
 
+def get_recently_published_raw_ids(limit_digests=2):
+    """Return the set of raw_item_ids already included in the N most recent digests."""
+    sql = """
+        SELECT DISTINCT si.raw_item_id
+        FROM digest_items di
+        JOIN scored_items si ON si.id = di.scored_item_id
+        WHERE di.digest_id IN (
+            SELECT id FROM digests ORDER BY created_at DESC LIMIT %s
+        )
+    """
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (limit_digests,))
+            return {row[0] for row in cur.fetchall()}
+
+
 def insert_scored_item(raw_item_id, one_liner, full_summary, importance, dedup_group=None):
     """Insert a scored item. Returns the new row id."""
     sql = """

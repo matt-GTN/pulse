@@ -108,8 +108,11 @@ rss:
     - name: Ars Technica
       url: https://feeds.arstechnica.com/arstechnica/technology-lab
       weight: 1
+anthropic:
+  enabled: true
+  weight: 3  # top-tier — lab blog, official announcements
+
 # ── Not yet wired (would need custom fetchers or don't expose RSS) ─────────
-# - Anthropic news (https://www.anthropic.com/news): no public RSS — scrape or skip
 # - Meta AI blog (https://ai.meta.com/blog/): no public RSS — scrape or skip
 # - Axios Technology: RSS endpoints return 403/404 — needs their API or scraping
 # - GitHub Trending (daily): no native RSS, needs scraping or github-trending-api

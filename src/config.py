@@ -61,4 +61,7 @@ def build_source_weights(sources: dict) -> dict:
         if name:
             weights[f"rss:{name}"] = feed.get("weight", default_fw)
 
+    anthropic = sources.get("anthropic") or {}
+    weights["anthropic"] = anthropic.get("weight", 3)
+
     return weights

@@ -1,6 +1,6 @@
 """
 Pulse — AI Digest Pipeline
-Usage: python src/main.py [morning|evening]
+Usage: python src/main.py morning
 """
 import sys
 from datetime import datetime, timezone, timedelta
@@ -12,6 +12,7 @@ from src.fetchers.arxiv import ArxivFetcher
 from src.fetchers.reddit import RedditFetcher
 from src.fetchers.hackernews import HackerNewsFetcher
 from src.fetchers.rss import RSSFetcher
+from src.fetchers.anthropic import AnthropicFetcher
 from src.processor.deduplicator import deduplicate
 from src.processor.summarizer import summarize_items
 from src.processor.ranker import rank
@@ -29,17 +30,12 @@ def _time_window(period: str):
     today = now.date()
 
     if period == "morning":
-        # 20:00 yesterday → now (run at 07:30 Paris = 05:30 UTC)
+        # Last 24h — single daily digest run at 07:30 Paris (05:30 UTC)
         window_end = now
-        window_start = window_end - timedelta(hours=12)
+        window_start = window_end - timedelta(hours=24)
         slug = f"{today.isoformat()}-morning"
-    elif period == "evening":
-        # 08:00 today → now (run at 19:30 Paris = 17:30 UTC)
-        window_start = datetime(today.year, today.month, today.day, 8, 0, tzinfo=_TZ)
-        window_end = now
-        slug = f"{today.isoformat()}-evening"
     else:
-        raise ValueError(f"Unknown period: {period!r}. Use 'morning' or 'evening'.")
+        raise ValueError(f"Unknown period: {period!r}. Use 'morning'.")
 
     return window_start, window_end, slug
 
@@ -55,6 +51,8 @@ def _run_fetchers(sources: dict, window_start: datetime, window_end: datetime):
         fetchers.append(HackerNewsFetcher(sources["hackernews"]))
     if sources.get("rss", {}).get("enabled"):
         fetchers.append(RSSFetcher(sources["rss"]))
+    if sources.get("anthropic", {}).get("enabled"):
+        fetchers.append(AnthropicFetcher(sources["anthropic"]))
 
     inserted_items = []
     for fetcher in fetchers:
@@ -111,7 +109,12 @@ def main(period: str):
         logger.warning("No items fetched — skipping digest")
         return
 
-    # ── 2. Deduplicate ────────────────────────────────────────────────────────
+    # ── 2. Filter already-published items, then deduplicate ──────────────────
+    published_ids = repo.get_recently_published_raw_ids(limit_digests=2)
+    if published_ids:
+        before = len(raw_items)
+        raw_items = [i for i in raw_items if i["id"] not in published_ids]
+        logger.info("Cross-run dedup: dropped %d already-published items", before - len(raw_items))
     unique_items = deduplicate(raw_items)
 
     # ── 3. Summarize + Rank ───────────────────────────────────────────────────
@@ -168,7 +171,7 @@ def main(period: str):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2 or sys.argv[1] not in ("morning", "evening"):
-        print("Usage: python src/main.py [morning|evening]", file=sys.stderr)
+    if len(sys.argv) != 2 or sys.argv[1] != "morning":
+        print("Usage: python src/main.py morning", file=sys.stderr)
         sys.exit(1)
     main(sys.argv[1])

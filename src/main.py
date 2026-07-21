@@ -1,6 +1,6 @@
 """
 Pulse — AI Digest Pipeline
-Usage: python src/main.py morning
+Usage: uv run python -m src.main morning
 """
 import sys
 from datetime import datetime, timezone, timedelta
@@ -172,6 +172,6 @@ def main(period: str):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2 or sys.argv[1] != "morning":
-        print("Usage: python src/main.py morning", file=sys.stderr)
+        print("Usage: uv run python -m src.main morning", file=sys.stderr)
         sys.exit(1)
     main(sys.argv[1])

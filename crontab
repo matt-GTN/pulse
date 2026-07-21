@@ -1,4 +1,4 @@
 PYTHONPATH=/app
 
 # Run digest pipeline once daily at 07:30 Europe/Paris — covers last 24h
-30 7 * * * cd /app && /usr/local/bin/python src/main.py morning >> /app/data/cron.log 2>&1
+30 7 * * * cd /app && /app/.venv/bin/python -m src.main morning >> /app/data/cron.log 2>&1

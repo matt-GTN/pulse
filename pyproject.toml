@@ -1,0 +1,20 @@
+[project]
+name = "pulse"
+version = "0.1.0"
+description = "Automated news digest pipeline"
+requires-python = ">=3.11"
+dependencies = [
+    "beautifulsoup4",
+    "feedparser",
+    "google-genai",
+    "jinja2",
+    "openai",
+    "psycopg2-binary",
+    "python-dateutil",
+    "pyyaml",
+    "requests",
+    "thefuzz",
+]
+
+[tool.uv]
+package = false

@@ -1,5 +1,6 @@
 .env
 .venv/
+.obsidian/
 __pycache__/
 *.pyc
 *.pyo

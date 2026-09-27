@@ -12,6 +12,9 @@ def init_db():
     schema = (Path(__file__).parent / "schema.sql").read_text()
     with _get_conn() as conn:
         with conn.cursor() as cur:
+            cur.execute("SELECT to_regclass('public.raw_items'), to_regclass('public.scored_items'), to_regclass('public.digests'), to_regclass('public.digest_items')")
+            if all(cur.fetchone()):
+                return
             cur.execute(schema)
         conn.commit()
 

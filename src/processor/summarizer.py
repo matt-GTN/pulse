@@ -30,6 +30,7 @@ def summarize_items(items: List[dict]) -> List[Tuple[dict, object]]:
     provider, rpm = _make_provider()
     seconds_per_call = 60 / rpm
     results = []
+    last_error = None
 
     for i, item in enumerate(items):
         try:
@@ -42,10 +43,13 @@ def summarize_items(items: List[dict]) -> List[Tuple[dict, object]]:
             results.append((item, scored))
             logger.info("[%d/%d] Scored '%s' → importance=%d", i + 1, len(items), item["title"][:60], scored.importance)
         except Exception as e:
+            last_error = e
             logger.warning("Summarize failed for '%s': %s", item["title"][:60], e)
 
         if i < len(items) - 1:
             time.sleep(seconds_per_call)
 
     logger.info("Summarized %d/%d items", len(results), len(items))
+    if items and not results and last_error is not None:
+        raise last_error
     return results

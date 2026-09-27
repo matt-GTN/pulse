@@ -158,3 +158,25 @@ def send_digest(slug: str, items: list, base_url: str = None) -> bool:
 
     logger.info("Telegram message sent for %s", slug)
     return True
+
+
+def send_error(stage: str, error: Exception, slug: str) -> bool:
+    """Send one plain-text operational alert to the configured Pulse chat."""
+    from src.utils.errors import describe_error
+    message = (
+        f"⚠️ Pulse — échec du digest {slug}\n"
+        f"Étape : {stage}\n"
+        f"Cause : {describe_error(error)}\n"
+        "Le traitement s’est interrompu ; la publication peut être incomplète.\n"
+        "Diagnostic local : /root/apps/pulse/data/cron.log et pulse.log"
+    )
+    try:
+        response = requests.post(
+            _API_BASE.format(token=os.environ["TELEGRAM_BOT_TOKEN"]),
+            json={"chat_id": os.environ["TELEGRAM_CHAT_ID"], "text": message[:4000]},
+            timeout=15,
+        )
+        return response.ok and response.json().get("ok", False)
+    except Exception:
+        logger.error("Unable to deliver Pulse error alert")
+        return False

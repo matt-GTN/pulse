@@ -17,7 +17,8 @@ from src.processor.deduplicator import deduplicate
 from src.processor.summarizer import summarize_items
 from src.processor.ranker import rank
 from src.publisher.html_generator import generate_digest_page, update_index
-from src.publisher.telegram import send_digest
+from src.publisher.telegram import send_digest, send_error
+from src.utils.errors import PipelineError, describe_error
 
 logger = get_logger("pulse.main")
 
@@ -55,6 +56,7 @@ def _run_fetchers(sources: dict, window_start: datetime, window_end: datetime):
         fetchers.append(AnthropicFetcher(sources["anthropic"]))
 
     inserted_items = []
+    failures = []
     for fetcher in fetchers:
         try:
             raw_items = fetcher.fetch(window_start, window_end)
@@ -78,31 +80,26 @@ def _run_fetchers(sources: dict, window_start: datetime, window_end: datetime):
                         "source_score": item.source_score,
                     })
         except Exception as e:
-            logger.warning("Fetcher %s failed: %s", type(fetcher).__name__, e)
+            failures.append(f"{type(fetcher).__name__}: {describe_error(e)}")
+            logger.warning("Fetcher failed: %s", failures[-1])
 
+    if failures and not inserted_items:
+        raise PipelineError("Collecte impossible. " + " ; ".join(failures))
     logger.info("Fetching done: %d items in window", len(inserted_items))
     return inserted_items
 
 
-def _fallback_telegram(slug: str, raw_items: list):
-    """Send raw headlines when LLM is unavailable."""
-    logger.warning("Sending fallback Telegram message (no summaries)")
-    items = [
-        {"one_liner": item["title"][:100], "importance": 5, "position": i + 1}
-        for i, item in enumerate(raw_items[:15])
-    ]
-    send_digest(slug, items)
-
-
-def main(period: str):
+def _run(period: str, state: dict):
     load_env()
     sources = load_sources()
+    state["stage"] = "Initialisation PostgreSQL"
     repo.init_db()
 
     window_start, window_end, slug = _time_window(period)
     logger.info("Starting %s digest: %s → %s", period, window_start, window_end)
 
     # ── 1. Fetch ──────────────────────────────────────────────────────────────
+    state["stage"] = "Collecte des sources"
     raw_items = _run_fetchers(sources, window_start, window_end)
 
     if not raw_items:
@@ -110,6 +107,7 @@ def main(period: str):
         return
 
     # ── 2. Filter already-published items, then deduplicate ──────────────────
+    state["stage"] = "Déduplication et lecture PostgreSQL"
     published_ids = repo.get_recently_published_raw_ids(limit_digests=2)
     if published_ids:
         before = len(raw_items)
@@ -118,19 +116,16 @@ def main(period: str):
     unique_items = deduplicate(raw_items)
 
     # ── 3. Summarize + Rank ───────────────────────────────────────────────────
-    try:
-        scored_pairs = summarize_items(unique_items)
-        top_pairs = rank(scored_pairs, source_weights=build_source_weights(sources))
-    except Exception as e:
-        logger.error("LLM pipeline failed: %s — sending fallback", e)
-        _fallback_telegram(slug, raw_items)
-        return
-
+    state["stage"] = "Résumés et classement LLM"
+    scored_pairs = summarize_items(unique_items)
+    top_pairs = rank(scored_pairs, source_weights=build_source_weights(sources))
+    if unique_items and not top_pairs:
+        raise PipelineError("Aucun résumé exploitable n’a été produit.")
     if not top_pairs:
-        logger.warning("No scored items — skipping digest")
         return
 
     # ── 4. Persist scored items & digest ─────────────────────────────────────
+    state["stage"] = "Enregistrement PostgreSQL"
     scored_ids = []
     for item, scored in top_pairs:
         sid = repo.insert_scored_item(
@@ -144,30 +139,37 @@ def main(period: str):
 
     digest_id = repo.create_digest(slug, window_start, window_end, scored_ids)
 
+    state["stage"] = "Publication HTML"
     # ── 5. Publish HTML ───────────────────────────────────────────────────────
-    try:
-        digest_data = repo.get_digest_by_slug(slug)
-        generate_digest_page(slug, digest_data)
-        repo.mark_html_generated(digest_id)
+    digest_data = repo.get_digest_by_slug(slug)
+    generate_digest_page(slug, digest_data)
+    repo.mark_html_generated(digest_id)
 
-        recent = repo.get_recent_digests()
-        update_index(recent)
-    except Exception as e:
-        logger.error("HTML generation failed: %s", e)
+    recent = repo.get_recent_digests()
+    update_index(recent)
 
+    state["stage"] = "Notification Telegram"
     # ── 6. Notify via Telegram ────────────────────────────────────────────────
-    try:
-        telegram_items = [
-            {"one_liner": scored.one_liner, "importance": scored.importance, "position": pos + 1}
-            for pos, (_, scored) in enumerate(top_pairs)
-        ]
-        ok = send_digest(slug, telegram_items)
-        if ok:
-            repo.mark_telegram_sent(digest_id)
-    except Exception as e:
-        logger.error("Telegram notification failed: %s", e)
+    telegram_items = [
+        {"one_liner": scored.one_liner, "importance": scored.importance, "position": pos + 1}
+        for pos, (_, scored) in enumerate(top_pairs)
+    ]
+    ok = send_digest(slug, telegram_items)
+    if not ok:
+        raise PipelineError("Telegram a refusé la notification du digest.")
+    repo.mark_telegram_sent(digest_id)
 
     logger.info("Digest %s complete — %d items", slug, len(top_pairs))
+
+
+def main(period: str):
+    state = {"stage": "Configuration"}
+    try:
+        _run(period, state)
+    except Exception as error:
+        slug = f"{datetime.now(tz=_TZ).date().isoformat()}-{period}"
+        send_error(state["stage"], error, slug)
+        raise
 
 
 if __name__ == "__main__":

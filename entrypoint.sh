@@ -10,6 +10,8 @@ for var in \
     GEMINI_API_KEY \
     GEMINI_MODEL \
     GROQ_API_KEY \
+    GROQ_MODEL \
+    GROQ_FALLBACK_MODEL \
     TZ \
     LOG_LEVEL \
     PYTHONPATH; do

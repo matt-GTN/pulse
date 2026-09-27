@@ -26,7 +26,8 @@ URL: {url}
 
 Respond in JSON only: {{"one_liner": "...", "full_summary": "...", "importance": N}}"""
 
-_DEFAULT_MODEL = "llama-3.3-70b-versatile"
+_DEFAULT_MODEL = "qwen/qwen3.8-27b"
+_DEFAULT_FALLBACK_MODEL = "openai/gpt-oss-120b"
 
 
 class GroqProvider(BaseLLMProvider):
@@ -36,6 +37,7 @@ class GroqProvider(BaseLLMProvider):
             base_url="https://api.groq.com/openai/v1",
         )
         self._model = os.environ.get("GROQ_MODEL", _DEFAULT_MODEL)
+        self._fallback_model = os.environ.get("GROQ_FALLBACK_MODEL", _DEFAULT_FALLBACK_MODEL)
 
     def summarize(self, source: str, title: str, content: str, url: str) -> ScoredResult:
         prompt = _PROMPT_TEMPLATE.format(
@@ -44,24 +46,32 @@ class GroqProvider(BaseLLMProvider):
             content=(content or "")[:2000],
             url=url,
         )
-        for attempt in range(4):
-            try:
-                response = self._client.chat.completions.create(
-                    model=self._model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.2,
-                    response_format={"type": "json_object"},
-                )
-                return self._parse(response.choices[0].message.content)
-            except Exception as e:
-                e_str = str(e)
-                if "429" in e_str or "503" in e_str or "rate" in e_str.lower() or "unavailable" in e_str.lower():
-                    wait = 2 ** (attempt + 2)
-                    logger.warning("Groq transient error (%s), retrying in %ds", e_str[:40], wait)
-                    time.sleep(wait)
-                else:
-                    raise
-        raise RuntimeError("Groq summarize failed after retries")
+        from src.utils.errors import describe_error
+        failures = []
+        models = list(dict.fromkeys([self._model, self._fallback_model]))
+        for model in models:
+            for attempt in range(4):
+                try:
+                    response = self._client.chat.completions.create(
+                        model=model,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.2,
+                        response_format={"type": "json_object"},
+                    )
+                    return self._parse(response.choices[0].message.content)
+                except Exception as exc:
+                    status = getattr(exc, "status_code", None)
+                    transient = status in (429, 500, 502, 503, 504) or type(exc).__name__ in ("APITimeoutError", "APIConnectionError")
+                    if transient and attempt < 3:
+                        time.sleep(2 ** (attempt + 2))
+                        continue
+                    failures.append(f"{model}: {describe_error(exc)}")
+                    logger.warning("Groq model failed: %s", failures[-1])
+                    break
+            if model != models[-1]:
+                logger.warning("Switching to fallback model %s", models[-1])
+        from src.utils.errors import PipelineError
+        raise PipelineError("Tous les modèles ont échoué. " + " ; ".join(failures))
 
     def _parse(self, text: str) -> ScoredResult:
         text = text.strip()

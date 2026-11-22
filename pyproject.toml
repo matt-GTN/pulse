@@ -2,7 +2,7 @@
 name = "pulse"
 version = "0.1.0"
 description = "Automated news digest pipeline"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4",
     "feedparser",
